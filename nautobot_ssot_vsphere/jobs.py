@@ -8,8 +8,9 @@ from diffsync.enum import DiffSyncFlags
 from diffsync.exceptions import ObjectNotCreated
 from django.templatetags.static import static
 from django.urls import reverse
-from nautobot.extras.jobs import BooleanVar, Job, ScriptVariable
-from nautobot.utilities.forms import DynamicModelChoiceField
+from nautobot.extras.jobs import BooleanVar, ScriptVariable
+from nautobot.core.celery import register_jobs
+from nautobot.core.forms.fields import DynamicModelChoiceField
 from nautobot.virtualization.models import Cluster
 from nautobot_ssot.jobs.base import DataMapping, DataSource
 
@@ -55,7 +56,7 @@ class OptionalObjectVar(ScriptVariable):
 
 
 # pylint:disable=too-few-public-methods
-class VspherecDataSource(DataSource, Job):
+class VspherecDataSource(DataSource):
     """Job syncing data from vSphere to Nautobot."""
 
     debug = BooleanVar(description="Enable for more verbose debug logging")
@@ -114,35 +115,46 @@ class VspherecDataSource(DataSource, Job):
 
     def log_debug(self, message):
         """Conditionally log a debug message."""
-        if self.kwargs.get("debug"):
-            super().log_debug(message)
+        if self.debug:
+            self.logger.debug(message)
 
-    def sync_data(self):
+    def run(  # pylint: disable=arguments-differ, too-many-arguments
+       self, dryrun, memory_profiling, debug, sync_vsphere_tagged_only, cluster_filter, *args, **kwargs
+    ):
+        """Perform data synchronization."""
+        self.sync_vsphere_tagged_only = sync_vsphere_tagged_only
+        self.cluster_filter = cluster_filter
+        self.debug = debug
+        self.dryrun = dryrun
+        self.memory_profiling = memory_profiling
+        super().run(dryrun=self.dryrun, memory_profiling=self.memory_profiling, *args, **kwargs)
+
+    def sync_data(self, memory_profiling):
         """Sync a device data from vSphere into Nautobot."""
-        dry_run = self.kwargs["dry_run"]
-        tagged_only = self.kwargs["sync_vsphere_tagged_only"]
-        debug_mode = self.kwargs["debug"]
+        dry_run = self.dryrun
+        tagged_only = self.sync_vsphere_tagged_only
+        debug_mode = self.debug
 
         if defaults.DEFAULT_USE_CLUSTERS:
             cluster_filter_object = (
-                Cluster.objects.get(pk=self.kwargs["cluster_filter"]) if self.kwargs["cluster_filter"] else None
+                Cluster.objects.get(pk=self.cluster_filter) if self.cluster_filter else None
             )
         else:
-            self.log_info(message="`DEFAULT_USE_CLUSTERS` is set to `False`")
+            self.logger.info(msg="`DEFAULT_USE_CLUSTERS` is set to `False`")
             if defaults.ENFORCE_CLUSTER_GROUP_TOP_LEVEL:
-                self.log_failure(message="Cannot `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` and disable `DEFAULT_USE_CLUSTERS`")
-                self.log_info(
-                    message="Set `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` to `False` or `DEFAULT_USE_CLUSTERS` to `True`"
+                self.logger.failure(msg="Cannot `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` and disable `DEFAULT_USE_CLUSTERS`")
+                self.logger.info(
+                    msg="Set `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` to `False` or `DEFAULT_USE_CLUSTERS` to `True`"
                 )
             cluster_filter_object = None
 
         options = f"`Debug`: {debug_mode}, `Dry Run`: {dry_run}, `Sync Tagged Only`: {tagged_only}, `Cluster Filter`: {cluster_filter_object}"  # NOQA
-        self.log_info(message=f"Starting job with the following options: {options}")
+        self.logger.info(msg=f"Starting job with the following options: {options}")
         vsphere_source = VsphereDiffSync(
             job=self, sync=self.sync, client=VsphereClient(), cluster_filter=cluster_filter_object
         )
 
-        self.log_info(message="Loading current data from vSphere...")
+        self.logger.info(msg="Loading current data from vSphere...")
         vsphere_source.load()
 
         dest = NautobotDiffSync(
@@ -152,10 +164,10 @@ class VspherecDataSource(DataSource, Job):
             cluster_filter=cluster_filter_object,
         )
 
-        self.log_info(message="Loading current data from Nautobot...")
+        self.logger.info(msg="Loading current data from Nautobot...")
         dest.load()
 
-        self.log_info(message="Calculating diffs...")
+        self.logger.info(msg="Calculating diffs...")
         flags = DiffSyncFlags.CONTINUE_ON_FAILURE
 
         diff = dest.diff_from(vsphere_source, flags=flags)
@@ -167,19 +179,20 @@ class VspherecDataSource(DataSource, Job):
         update = diff.summary().get("update")
         delete = diff.summary().get("delete")
         no_change = diff.summary().get("no-change")
-        self.log_info(
-            message=f"DiffSync Summary: Create: {create}, Update: {update}, Delete: {delete}, No Change: {no_change}"
+        self.logger.info(
+            msg=f"DiffSync Summary: Create: {create}, Update: {update}, Delete: {delete}, No Change: {no_change}"
         )
         if not dry_run:
-            self.log_info(message="Syncing from vSphere to Nautobot")
+            self.logger.info(msg="Syncing from vSphere to Nautobot")
             try:
                 dest.sync_from(vsphere_source, flags=flags)
             except ObjectNotCreated as err:
-                self.log_warning(f"Unable to create object. {err}")
+                self.logger.warning(f"Unable to create object. {err}")
             # except Exception as err:  # Keep it general, as final resort
             #     self.log_warning(f"Error occured. {err}")
 
-        self.log_success(message="Sync complete.")
+        self.logger.info(msg="Sync complete.")
 
 
 jobs = [VspherecDataSource]
+register_jobs(*jobs)

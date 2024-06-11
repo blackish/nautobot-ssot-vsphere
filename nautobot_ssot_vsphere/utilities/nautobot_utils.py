@@ -5,7 +5,7 @@ from typing import Any
 from django.contrib.contenttypes.models import ContentType
 from nautobot.extras.choices import CustomFieldTypeChoices
 from nautobot.extras.models import CustomField, Tag
-from nautobot.utilities.choices import ColorChoices
+from nautobot.core.choices import ColorChoices
 from nautobot.virtualization.models import (
     Cluster,
     ClusterGroup,
@@ -20,7 +20,6 @@ TODAY = datetime.date.today().isoformat()
 def create_ssot_tag():
     """Create vSphere SSoT Tag."""
     ssot_tag, _ = Tag.objects.get_or_create(
-        slug="ssot-synced-from-vsphere",
         name="SSoT Synced from vSphere",
         defaults={
             "description": "Object synced at some point from VMWare vSphere to Nautobot",
@@ -53,10 +52,10 @@ def tag_object(
             nautobot_object.tags.add(tag)
         if hasattr(nautobot_object, "cf"):
             # Ensure that the "ssot-synced-from-vsphere" custom field is present
-            if not any(cfield for cfield in CustomField.objects.all() if cfield.name == "ssot-synced-from-vsphere"):
+            if not any(cfield for cfield in CustomField.objects.all() if cfield.description == "ssot-synced-from-vsphere"):
                 custom_field_obj, _ = CustomField.objects.get_or_create(
                     type=CustomFieldTypeChoices.TYPE_DATE,
-                    name="ssot-synced-from-vsphere",
+                    description="ssot-synced-from-vsphere",
                     defaults={
                         "label": "Last synced from vSphere on",
                     },

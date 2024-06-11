@@ -30,7 +30,7 @@ class NautobotSsotVsphereConfig(PluginConfig):
         "VSPHERE_USERNAME",
     ]
     min_version = "1.2.0"
-    max_version = "1.9999"
+    max_version = "2.9999"
     default_settings = {
         "VSPHERE_VM_STATUS_MAP": {"POWERED_OFF": "Offline", "POWERED_ON": "Active", "SUSPENDED": "Suspended"},
         "VSPHERE_VM_INTERFACE_MAP": {"NOT_CONNECTED": False, "CONNECTED": True},

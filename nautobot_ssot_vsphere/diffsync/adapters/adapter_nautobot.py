@@ -61,13 +61,13 @@ class NautobotDiffSync(DiffSyncModelAdapters):
         for grouping in ("_ipaddress", "_vminterface", "_virtualmachine", "_cluster", "_clustergroup"):
             for nautobot_object in self.objects_to_delete[grouping]:
                 try:
-                    self.job.log_info(obj=nautobot_object, message=f"Deleting object {nautobot_object}")
+                    self.job.logger.info(msg=f"Deleting object {nautobot_object}")
                     nautobot_object.delete()
                 except ProtectedError:
-                    self.job.log_failure(obj=nautobot_object, message="Deletion failed protected object")
+                    self.job.logger.failure(msg="Deletion failed protected object")
                 except IntegrityError:
-                    self.job.log_failure(
-                        obj=nautobot_object, message=f"Deletion failed due to IntegrityError with {nautobot_object}"
+                    self.job.logger.failure(
+                        msg=f"Deletion failed due to IntegrityError with {nautobot_object}"
                     )
             self.objects_to_delete[grouping] = []
         return super().sync_complete(source, *args, **kwargs)
@@ -84,8 +84,8 @@ class NautobotDiffSync(DiffSyncModelAdapters):
             if self.cluster_filter:
                 cluster_objects = Cluster.objects.filter(Q(name=self.cluster_filter.name) & Q(tags__slug=ssot_tag.slug))
                 if not cluster_objects:
-                    self.job.log_warning(
-                        message=f"{self.cluster_filter.name} was used to filter, alongside SSoT Tag. {self.cluster_filter.name} is not tagged."  # NOQA
+                    self.job.logger.warning(
+                        msg=f"{self.cluster_filter.name} was used to filter, alongside SSoT Tag. {self.cluster_filter.name} is not tagged."  # NOQA
                     )
         elif not self.sync_vsphere_tagged_only:
             if self.cluster_filter:
@@ -128,8 +128,8 @@ class NautobotDiffSync(DiffSyncModelAdapters):
                     Q(cluster=self.cluster_filter) & Q(tags__slug=ssot_tag.slug)
                 )
                 if not virtual_machines:
-                    self.job.log_warning(
-                        message=f"{self.cluster_filter.name} was used to filter, alongside SSoT Tag. {self.cluster_filter.name} is potentially not tagged. No objects found."  # NOQA
+                    self.job.logger.warning(
+                        msg=f"{self.cluster_filter.name} was used to filter, alongside SSoT Tag. {self.cluster_filter.name} is potentially not tagged. No objects found."  # NOQA
                     )
         elif not self.sync_vsphere_tagged_only:
             if self.cluster_filter:
@@ -168,7 +168,7 @@ class NautobotDiffSync(DiffSyncModelAdapters):
         for ip_address in nautobot_vm_interface.ip_addresses.all():
             diffsync_ipaddress, _ = self.get_or_instantiate(
                 self.diffsync_ipaddress,
-                {"ip_address": ip_address.host, "prefix_length": ip_address.prefix_length},
+                {"ip_address": ip_address.host, "prefix_length": ip_address.mask_length},
                 {
                     "state": ip_address.status.name,
                     "mac_address": diffsync_vminterface.mac_address,
@@ -199,20 +199,19 @@ class NautobotDiffSync(DiffSyncModelAdapters):
                 self.diffsync_cluster,
                 {"name": cluster_record.name},
                 {
-                    "cluster_type": cluster_record.type.name,
-                    "group": cluster_record.group.name if cluster_record.group else None,
+                    "cluster_type": cluster_record.cluster_type.name,
+                    "group": cluster_record.cluster_group.name if cluster_record.cluster_group else None,
                 },
             )
 
             if defaults.ENFORCE_CLUSTER_GROUP_TOP_LEVEL:
                 # Merge child into parent ClusterGroup
-                if cluster_record.group:
-                    cluster_group_parent = self.get(self.diffsync_clustergroup, cluster_record.group.name)
+                if cluster_record.cluster_group:
+                    cluster_group_parent = self.get(self.diffsync_clustergroup, cluster_record.cluster_group.name)
                     cluster_group_parent.add_child(diffsync_cluster)
                 elif defaults.DEFAULT_USE_CLUSTERS:
-                    self.job.log_warning(
-                        message=f"{cluster_record}, is missing association to a Cluster Group. Please correct to ensure proper sync. `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` is enabled.",  # NOQA
-                        obj=cluster_record,
+                    self.job.logger.warning(
+                        msg=f"{cluster_record}, is missing association to a Cluster Group. Please correct to ensure proper sync. `ENFORCE_CLUSTER_GROUP_TOP_LEVEL` is enabled.",  # NOQA
                     )
 
     def load_data(self):

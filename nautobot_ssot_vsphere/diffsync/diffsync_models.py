@@ -59,11 +59,10 @@ class DiffSyncClusterGroup(DiffSyncExtras):
         try:
             clustergroup, _ = ClusterGroup.objects.get_or_create(
                 name=ids["name"],
-                slug=slugify(ids["name"]),
             )
             tag_object(clustergroup)
         except IntegrityError:
-            diffsync.job.log_warning(message=f"ClusterGroup {ids['name']} already exists.")
+            diffsync.job.logger.warning(msg=f"ClusterGroup {ids['name']} already exists.")
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def delete(self) -> Optional["DiffSyncModel"]:
@@ -72,7 +71,7 @@ class DiffSyncClusterGroup(DiffSyncExtras):
             self.ordered_delete(ClusterGroup.objects.get(name=self.name))
             return self
         except ClusterGroup.DoesNotExist:
-            self.diffsync.job.log_warning(f"Unable to match Cluster Group by name, {self.name}")
+            self.diffsync.job.logger.warning(msg=f"Unable to match Cluster Group by name, {self.name}")
 
 
 class DiffSyncCluster(DiffSyncExtras):
@@ -99,14 +98,14 @@ class DiffSyncCluster(DiffSyncExtras):
             tag_object(_default_vsphere_type)
             cluster, _ = Cluster.objects.get_or_create(
                 name=ids["name"],
-                type=_default_vsphere_type,
+                cluster_type=_default_vsphere_type,
             )
             if attrs["group"]:
                 clustergroup, _ = ClusterGroup.objects.get_or_create(name=attrs["group"])
-                cluster.group = clustergroup
+                cluster.cluster_group = clustergroup
             tag_object(cluster)
         except IntegrityError:
-            diffsync.job.log_warning(message=f"ClusterGroup {ids['name']} already exists.")
+            diffsync.job.logger.warning(msg=f"ClusterGroup {ids['name']} already exists.")
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def delete(self) -> Optional["DiffSyncModel"]:
@@ -115,17 +114,17 @@ class DiffSyncCluster(DiffSyncExtras):
             self.ordered_delete(Cluster.objects.get(name=self.name))
             return self
         except Cluster.DoesNotExist:
-            self.diffsync.job.log_warning(f"Unable to match Cluster by name, {self.name}")
+            self.diffsync.job.logger.warning(msg=f"Unable to match Cluster by name, {self.name}")
 
     def update(self, attrs):
         """Update devices in Nautbot based on Source."""
         cluster = Cluster.objects.get(name=self.name)
         _default_vsphere_type, _ = ClusterType.objects.get_or_create(name=defaults.DEFAULT_VSPHERE_TYPE)
         if attrs.get("group"):
-            clustergroup, _ = ClusterGroup.objects.get_or_create(name=attrs["group"])
-            cluster.group = clustergroup
+            clustergroup, _ = ClusterGroup.objects.get_or_create(name=attrs["cluster_group"])
+            cluster.cluster_group = clustergroup
         if attrs.get("cluster_type"):
-            cluster.type = _default_vsphere_type
+            cluster.cluster_type = _default_vsphere_type
         tag_object(cluster)
 
 
@@ -150,14 +149,15 @@ class DiffSyncVMInterface(DiffSyncExtras):
         try:
             vm_interface, _ = VMInterface.objects.get_or_create(
                 name=ids["name"],
+                status=Status.objects.get_for_model(VMInterface).get(name="Active"),
                 enabled=attrs["enabled"],
                 virtual_machine=VirtualMachine.objects.get(name=ids["virtual_machine"]),
                 mac_address=attrs["mac_address"],
             )
             tag_object(vm_interface)
         except IntegrityError as error:
-            diffsync.job.log_warning(
-                message=f"Virtual Machine Interface {ids['name']} already exists. {error}", obj=vm_interface
+            diffsync.job.logger.warning(
+                msg=f"Virtual Machine Interface {ids['name']} already exists. {error}"
             )
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
@@ -178,7 +178,7 @@ class DiffSyncVMInterface(DiffSyncExtras):
             self.ordered_delete(interface)
             return self
         except VMInterface.DoesNotExist:
-            self.diffsync.job.log_warning(f"Unable to match VMInterface by name, {self.name}")
+            self.diffsync.job.logger.warning(msg=f"Unable to match VMInterface by name, {self.name}")
 
     def update(self, attrs):
         """Update VMInterface on Virtual Machine."""
@@ -196,8 +196,8 @@ class DiffSyncVMInterface(DiffSyncExtras):
             # Call the super().update() method to update the in-memory DiffSyncModel instance
             return super().update(attrs)
         except VirtualMachine.DoesNotExist:
-            self.diffsync.job.log_warning(
-                f"Unable to match VM Interface by name, {self.name} and VM {self.virtual_machine}"
+            self.diffsync.job.logger.warning(
+                msg=f"Unable to match VM Interface by name, {self.name} and VM {self.virtual_machine}"
             )
 
 
@@ -250,7 +250,7 @@ class DiffSyncIpAddress(DiffSyncExtras):
             tag_object(ip_address)
 
         except IntegrityError as error:
-            diffsync.job.log_warning(message=f"IP Address {ids['ip_address']} already exists. {error}", obj=ip_address)
+            diffsync.job.logger.warning(msg=f"IP Address {ids['ip_address']} already exists. {error}")
 
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
@@ -265,8 +265,8 @@ class DiffSyncIpAddress(DiffSyncExtras):
             )
             return self
         except IPAddress.DoesNotExist:
-            self.diffsync.job.log_warning(
-                f"Unable to match IPAddress by host {self.ip_address} and Prefix Length {self.prefix_length}"
+            self.diffsync.job.logger.warning(
+                msg=f"Unable to match IPAddress by host {self.ip_address} and Prefix Length {self.prefix_length}"
             )
 
     def update(self, attrs):
@@ -284,8 +284,8 @@ class DiffSyncIpAddress(DiffSyncExtras):
             # Call the super().update() method to update the in-memory DiffSyncModel instance
             return super().update(attrs)
         except IPAddress.DoesNotExist:
-            self.diffsync.job.log_warning(
-                f"Unable to match IPAddress by host {self.ip_address} and Prefix Length {self.prefix_length}"
+            self.diffsync.job.logger.warning(
+                msg=f"Unable to match IPAddress by host {self.ip_address} and Prefix Length {self.prefix_length}"
             )
 
 
@@ -339,7 +339,7 @@ class DiffSyncVirtualMachine(DiffSyncExtras):
             )
             tag_object(virtual_machine)
         except IntegrityError as error:
-            diffsync.job.log_warning(message=f"Virtual Machine {ids['name']} already exists. {error}")
+            diffsync.job.logger.warning(msg=f"Virtual Machine {ids['name']} already exists. {error}")
         return super().create(ids=ids, diffsync=diffsync, attrs=attrs)
 
     def delete(self) -> Optional["DiffSyncModel"]:
@@ -348,7 +348,7 @@ class DiffSyncVirtualMachine(DiffSyncExtras):
             self.ordered_delete(VirtualMachine.objects.get(name=self.name))
             return self
         except VirtualMachine.DoesNotExist:
-            self.diffsync.job.log_warning(f"Unable to match VirtualMachine by name, {self.name}")
+            self.diffsync.job.logger.warning(msg=f"Unable to match VirtualMachine by name, {self.name}")
 
     def update(self, attrs):
         """Update Virtual Machine."""
@@ -382,7 +382,7 @@ class DiffSyncVirtualMachine(DiffSyncExtras):
             # Call the super().update() method to update the in-memory DiffSyncModel instance
             return super().update(attrs)
         except VirtualMachine.DoesNotExist:
-            self.diffsync.job.log_warning(f"Unable to match VirtualMachine by name, {self.name}")
+            self.diffsync.job.logger.warning(msg=f"Unable to match VirtualMachine by name, {self.name}")
 
 
 if defaults.DEFAULT_USE_CLUSTERS:
