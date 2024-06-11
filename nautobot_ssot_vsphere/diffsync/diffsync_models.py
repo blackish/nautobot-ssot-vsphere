@@ -260,7 +260,7 @@ class DiffSyncIpAddress(DiffSyncExtras):
             self.ordered_delete(
                 IPAddress.objects.get(
                     host=self.ip_address,
-                    prefix_length=self.prefix_length,
+                    mask_length=self.prefix_length,
                 ),
             )
             return self
@@ -274,7 +274,7 @@ class DiffSyncIpAddress(DiffSyncExtras):
         try:
             ip_address = IPAddress.objects.get(
                 host=self.ip_address,
-                prefix_length=self.prefix_length,
+                mask_length=self.prefix_length,
             )
             if attrs.get("status"):
                 ip_address.status = Status.objects.get(attrs["state"])
