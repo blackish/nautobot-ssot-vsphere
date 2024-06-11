@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nautobot-ssot-vsphere"
-version = "0.1.4"
+version = "0.1.5"
 description = "Nautobot SSoT vSphere"
 authors = ["h4ndzdatm0ld <hugotinoco@icloud.com>"]
 license = "Apache-2.0"
@@ -19,8 +19,8 @@ packages = [
 [tool.poetry.dependencies]
 # Used for local development
 python = "^3.7"
-diffsync = "^1.4.3"
-nautobot-ssot = "^1.1.0"
+diffsync = "^1.10.0"
+nautobot-ssot = "^2.6.1"
 netutils = "^1.1.0"
 
 [tool.poetry.dev-dependencies]
