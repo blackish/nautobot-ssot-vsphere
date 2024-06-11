@@ -4,7 +4,7 @@
 from typing import List, Optional
 
 from nautobot.extras.choices import CustomFieldTypeChoices
-from nautobot.utilities.choices import ColorChoices
+from nautobot.core.choices import ColorChoices
 
 
 def create_custom_field(field_name: str, label: str, models: List, apps, cf_type: Optional[str] = "type_date"):
@@ -22,7 +22,7 @@ def create_custom_field(field_name: str, label: str, models: List, apps, cf_type
     if cf_type == "type_date":
         custom_field, _ = CustomField.objects.get_or_create(
             type=CustomFieldTypeChoices.TYPE_DATE,
-            name=field_name,
+            description=field_name,
             defaults={
                 "label": label,
             },
@@ -30,7 +30,7 @@ def create_custom_field(field_name: str, label: str, models: List, apps, cf_type
     else:
         custom_field, _ = CustomField.objects.get_or_create(
             type=CustomFieldTypeChoices.TYPE_TEXT,
-            name=field_name,
+            description=field_name,
             defaults={
                 "label": label,
             },
@@ -61,13 +61,12 @@ def nautobot_database_ready_callback(sender, *, apps, **kwargs):  # pylint: disa
     ContentType = apps.get_model("contenttypes", "ContentType")  # pylint:disable=invalid-name
 
     status, _ = Status.objects.get_or_create(
-        name="Suspended", slug="suspended", description="Machine is in a suspended state"
+        name="Suspended", description="Machine is in a suspended state"
     )
     status.content_types.add(ContentType.objects.get_for_model(VirtualMachine))
     status.save()
 
     tag, _ = Tag.objects.get_or_create(
-        slug="ssot-synced-from-vsphere",
         name="SSoT Synced from vSphere",
         defaults={
             "description": "Object synced at some point from VMWare vSphere to Nautobot",
